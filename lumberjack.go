@@ -342,10 +342,10 @@ func (l *Logger) max() int64 {
 
 // dir returns the directory in which log files should be stored.
 func (l *Logger) dir() string {
-	if l.Dir != "" {
-		return l.Dir
+	if l.Dir == "" {
+		l.Dir = os.TempDir()
 	}
-	return os.TempDir()
+	return l.Dir
 }
 
 // format returns the name format for log files.
