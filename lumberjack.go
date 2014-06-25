@@ -30,7 +30,7 @@ const (
 	Megabyte = 1024 * 1024
 	Gigabyte = 1024 * Megabyte
 
-	defaultNameFormat = "2006-01-02T15-04-05.000.log"
+	defaultNameFormat = "2006-01-02T15-04-05.000000000.log"
 	defaultMaxSize    = 100 * Megabyte
 )
 
