@@ -92,9 +92,10 @@ type Logger struct {
 	// computer's local time.  The default is to use UTC time.
 	LocalTime bool `json:"localtime" yaml:"localtime"`
 
-	size int64
-	file *os.File
-	mu   sync.Mutex
+	size  int64
+	file  *os.File
+	files []os.FileInfo
+	mu    sync.Mutex
 }
 
 var (
@@ -139,6 +140,23 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+// File returns the path to the current log file and its size.
+func (l *Logger) File() (name string, size int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file != nil {
+		name = l.file.Name()
+	}
+	size = l.size
+	return
+}
+
+func (l *Logger) OldFiles() []os.FileInfo {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.files
+}
+
 // Close implements io.Closer, and closes the current logfile.
 func (l *Logger) Close() error {
 	l.mu.Lock()
@@ -153,6 +171,7 @@ func (l *Logger) close() error {
 	}
 	err := l.file.Close()
 	l.file = nil
+	l.files, _ = l.oldLogFiles()
 	return err
 }
 
@@ -258,7 +277,8 @@ func (l *Logger) cleanup() error {
 		return nil
 	}
 
-	files, err := l.oldLogFiles()
+	var err error
+	l.files, err = l.oldLogFiles()
 	if err != nil {
 		return err
 	}
@@ -266,15 +286,15 @@ func (l *Logger) cleanup() error {
 	var deletes []os.FileInfo
 
 	if l.MaxBackups > 0 {
-		deletes = files[l.MaxBackups:]
-		files = files[:l.MaxBackups]
+		deletes = l.files[l.MaxBackups:]
+		l.files = l.files[:l.MaxBackups]
 	}
 	if l.MaxAge > 0 {
 		diff := time.Duration(-1 * int64(day) * int64(l.MaxAge))
 
 		cutoff := currentTime().Add(diff)
 
-		for _, f := range files {
+		for _, f := range l.files {
 			if f.ModTime().Before(cutoff) {
 				deletes = append(deletes, f)
 			}
@@ -305,13 +325,13 @@ func (l *Logger) oldLogFiles() ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't read log file directory: %s", err)
 	}
-	logFiles := []os.FileInfo{}
+	var logFiles []os.FileInfo
 
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
-		if filepath.Base(f.Name()) == filepath.Base(l.file.Name()) {
+		if l.file != nil && filepath.Base(f.Name()) == filepath.Base(l.file.Name()) {
 			continue
 		}
 
